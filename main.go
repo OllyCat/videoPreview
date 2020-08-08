@@ -19,6 +19,13 @@ import (
 )
 
 func main() {
+	//f, _ := os.Create("cpu.trace.ext")
+	//defer f.Close()
+	//pprof.StartCPUProfile(f)
+	//defer pprof.StopCPUProfile()
+	//trace.Start(f)
+	//defer trace.Stop()
+
 	// подсказка по использованию
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Using:\n\n%s <file name> [ <file name> ... ]\n", os.Args[0])
@@ -64,27 +71,37 @@ func main() {
 		// создаём прогресс бар
 		bar := progressbar.New(sQuant)
 
-		for i := 0; i < sQuant; i++ {
-			// встаём на очередную позицию в видеопотоке
-			f.Set(gocv.VideoCapturePosFrames, float64(vPos))
-			// смещаемся на дельту
-			vPos += vDelta
-			// берём новый mat
-			mat := gocv.NewMat()
-			// читаем кадр в mat
-			f.Read(&mat)
-			// изменяем размер мата
-			gocv.Resize(mat, &mat, image.Point{int(w / denom), int(h / denom)}, 0, 0, gocv.InterpolationLinear)
-			// превращаем мат в имидж
-			img, err := mat.ToImage()
-			if err != nil {
-				log.Printf("Frame %d has error: %v\n", i, err)
-				continue
+		ch := make(chan image.Image)
+
+		go func() {
+			defer close(ch)
+			for i := 0; i < sQuant; i++ {
+				// встаём на очередную позицию в видеопотоке
+				f.Set(gocv.VideoCapturePosFrames, float64(vPos))
+				// смещаемся на дельту
+				vPos += vDelta
+				// берём новый mat
+				mat := gocv.NewMat()
+				// читаем кадр в mat
+				f.Read(&mat)
+				// изменяем размер мата
+				gocv.Resize(mat, &mat, image.Point{int(w / denom), int(h / denom)}, 0, 0, gocv.InterpolationLinear)
+				// превращаем мат в имидж
+				img, err := mat.ToImage()
+				if err != nil {
+					log.Printf("Frame %d has error: %v\n", i, err)
+					continue
+				}
+
+				ch <- img
+				// крутим бар
+				bar.Add(1)
 			}
+		}()
+
+		for img := range ch {
 			// собираем полученные картинки в слайс
 			imgs = append(imgs, img)
-			// крутим бар
-			bar.Add(1)
 		}
 
 		// монтируем картинку
