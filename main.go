@@ -19,13 +19,6 @@ import (
 )
 
 func main() {
-	//f, _ := os.Create("cpu.trace.ext")
-	//defer f.Close()
-	//pprof.StartCPUProfile(f)
-	//defer pprof.StopCPUProfile()
-	//trace.Start(f)
-	//defer trace.Stop()
-
 	// подсказка по использованию
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Using:\n\n%s <file name> [ <file name> ... ]\n", os.Args[0])
@@ -71,37 +64,36 @@ func main() {
 		// создаём прогресс бар
 		bar := progressbar.New(sQuant)
 
-		ch := make(chan image.Image)
+		for i := 0; i < sQuant; i++ {
+			// встаём на очередную позицию в видеопотоке
+			f.Set(gocv.VideoCapturePosFrames, float64(vPos))
+			// смещаемся на дельту
+			vPos += vDelta
+			// берём новый mat
+			mat := gocv.NewMat()
 
-		go func() {
-			defer close(ch)
-			for i := 0; i < sQuant; i++ {
-				// встаём на очередную позицию в видеопотоке
-				f.Set(gocv.VideoCapturePosFrames, float64(vPos))
-				// смещаемся на дельту
-				vPos += vDelta
-				// берём новый mat
-				mat := gocv.NewMat()
-				// читаем кадр в mat
-				f.Read(&mat)
-				// изменяем размер мата
-				gocv.Resize(mat, &mat, image.Point{int(w / denom), int(h / denom)}, 0, 0, gocv.InterpolationLinear)
-				// превращаем мат в имидж
-				img, err := mat.ToImage()
-				if err != nil {
-					log.Printf("Frame %d has error: %v\n", i, err)
-					continue
-				}
-
-				ch <- img
-				// крутим бар
-				bar.Add(1)
+			// читаем кадр в mat
+			ok := f.Read(&mat)
+			// если не прочитался - выходим
+			if !ok {
+				bar.Finish()
+				log.Println("WARN: Битый видео поток.")
+				break
 			}
-		}()
 
-		for img := range ch {
+			// изменяем размер мата
+			gocv.Resize(mat, &mat, image.Point{int(w / denom), int(h / denom)}, 0, 0, gocv.InterpolationLinear)
+
+			img, err := mat.ToImage()
+			if err != nil {
+				log.Printf("Frame %d has error: %v\n", i, err)
+				continue
+			}
+
 			// собираем полученные картинки в слайс
 			imgs = append(imgs, img)
+			// крутим бар
+			bar.Add(1)
 		}
 
 		// монтируем картинку
@@ -119,7 +111,7 @@ func montageShell(imgs []image.Image, fName, pName string) (errRet error) {
 	// для этого приходится сохранить все картинки в файлы
 	for i, img := range imgs {
 		tmpFName := fmt.Sprintf("out%02d.jpg", i)
-		f, err := os.OpenFile(tmpFName, os.O_CREATE|os.O_WRONLY, 0600)
+		f, err := os.Create(tmpFName)
 		if err != nil {
 			log.Fatalf("Could not create temp file: %v\n", err)
 		}
@@ -144,8 +136,19 @@ func montageNative(imgs []image.Image, fName, pName string) (err error) {
 
 	// размер превьюшки
 	b := imgs[0].Bounds()
+
 	// размер общей превьюшки
-	r := image.Rect(0, 0, b.Dx()*5+30, b.Dy()*5+30)
+	l := len(imgs)
+	rx := 5
+	if l < 5 {
+		rx = l
+	}
+	ry := l / 5
+	if l%5 > 0 {
+		ry++
+	}
+	r := image.Rect(0, 0, b.Dx()*rx+(rx+1)*5, b.Dy()*ry+(ry+1)*5)
+
 	// создаём картинку
 	prw := image.NewRGBA(r)
 	// фон
@@ -174,7 +177,7 @@ func montageNative(imgs []image.Image, fName, pName string) (err error) {
 	}
 
 	// открываем файл
-	f, err := os.OpenFile(pName, os.O_CREATE|os.O_WRONLY, 0600)
+	f, err := os.Create(pName)
 	if err != nil {
 		return
 	}
