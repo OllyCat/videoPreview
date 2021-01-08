@@ -13,7 +13,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/schollz/progressbar"
+	"github.com/schollz/progressbar/v3"
 
 	"gocv.io/x/gocv"
 )
