@@ -106,7 +106,7 @@ func main() {
 	}
 }
 
-// сбор картинок в одну с помощью внешней комманды imagemagick
+// сбор картинок в одну с помощью внешней команды imagemagick
 func montageShell(imgs []image.Image, fName, pName string) (errRet error) {
 	// для этого приходится сохранить все картинки в файлы
 	for i, img := range imgs {
@@ -124,7 +124,7 @@ func montageShell(imgs []image.Image, fName, pName string) (errRet error) {
 
 	cmd := exec.Command("montage", "-shadow", "-frame", "5", "-geometry", "+10+10", "out??.jpg", pName)
 	errRet = cmd.Run()
-	for i, _ := range imgs {
+	for i := range imgs {
 		tmpFName := fmt.Sprintf("out%02d.jpg", i)
 		os.Remove(tmpFName)
 	}
@@ -172,7 +172,7 @@ func montageNative(imgs []image.Image, fName, pName string) (err error) {
 		xd = x*(b.Dx()+5) + 5
 		yd = y*(b.Dy()+5) + 5
 
-		// крисуем очередной кадр
+		// рисуем очередной кадр
 		draw.Draw(prw, b.Add(image.Pt(xd, yd)), img, image.ZP, draw.Over)
 	}
 
